@@ -2,6 +2,8 @@
 
 An interactive web-based tool for easily analyzing VLE (Vapor-Liquid Equilibrium) lab pressure data from lab experiments (specifically designed for CHEG345 at UD). I was looking around for a simple tool with all the functionality I needed to quickly analyze pressure signals and couldn't find it. So I made it! 
 
+![](screenshot.png)
+
 ## Features
 
 - **Load CSV Files**: Upload custom data files with time and signal columns
