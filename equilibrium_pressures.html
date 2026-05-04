@@ -550,6 +550,26 @@
       return lines.join('\n');
     }
 
+    function generateExportTSV() {
+      if (regions.length === 0) return null;
+      const sortedRegions = [...regions].sort((a, b) => a.x0 - b.x0);
+      const lines = ['region\tx_start\tx_end\tmean_signal\tstd_signal\tn_points'];
+      sortedRegions.forEach((region, idx) => {
+        const stats = computeStatsForRegion(region);
+        const x_start_idx = getIndexForX(region.x0);
+        const x_end_idx = getIndexForX(region.x1);
+        lines.push([
+          idx + 1,
+          x_start_idx,
+          x_end_idx,
+          stats.n >= 1 ? formatSig(stats.mean) : '',
+          stats.n > 1 ? formatSig(stats.std) : '',
+          stats.n
+        ].join('\t'));
+      });
+      return lines.join('\n');
+    }
+
     exportBtn.addEventListener('click', async () => {
       const csvContent = generateExportCSV();
       if (!csvContent) {
@@ -583,12 +603,12 @@
     });
 
     copyClipboardBtn.addEventListener('click', () => {
-      const csvContent = generateExportCSV();
-      if (!csvContent) {
+      const tsv = generateExportTSV();
+      if (!tsv) {
         alert('No regions to export');
         return;
       }
-      navigator.clipboard.writeText(csvContent).then(() => {
+      navigator.clipboard.writeText(tsv).then(() => {
         copyClipboardBtn.textContent = 'Copied!';
         setTimeout(() => {
           copyClipboardBtn.textContent = 'Copy to Clipboard';
