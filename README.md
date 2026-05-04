@@ -4,6 +4,9 @@ An interactive web-based tool for easily analyzing VLE (Vapor-Liquid Equilibrium
 
 <img src="screenshot.png" alt="screenshot of the program" width="600"/>
 
+[CLICK HERE TO USE THE TOOL](https://kylecapybara.github.io/pressure-tool/equilibrium_pressures.html)
+
+
 ## Features
 
 - **Load CSV Files**: Upload custom data files with any columns
