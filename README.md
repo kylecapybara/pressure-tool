@@ -20,7 +20,7 @@ An interactive web-based tool for easily analyzing VLE (Vapor-Liquid Equilibrium
 - **Statistical Analysis**: Automatically calculates mean, standard deviation, and point count for each region
 - **Export Results**: 
   - Export region statistics as a CSV file with save dialog
-  - Copy results directly to clipboard
+  - Copy results directly to clipboard (paste-able into Excel/Google Sheets!)
 
 ## Usage
 
