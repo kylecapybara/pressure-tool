@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Equilibrium Pressure Extractor</title>
+  <style>
+    :root{--bg:#0f1115;--panel:#121316;--muted:#9aa3b2;--accent:#4fc3f7;--card:#16181b}
+    html,body{height:100%;margin:0;background:var(--bg);color:#e6eef6;font-family:Inter,Arial,Helvetica,sans-serif}
+    .wrap{max-width:1100px;margin:18px auto;padding:18px}
+    h1{margin:0 0 12px;font-weight:600;color:#fff}
+    .subhead{margin:-4px 0 14px;color:var(--muted);font-size:13px}
+    .top{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:12px;background:rgba(18,19,22,0.9);border:1px solid rgba(255,255,255,0.06);border-radius:10px}
+    .control-group{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .select,.btn,.file-label{height:38px;border-radius:6px;border:1px solid #2b2f33;font:inherit}
+    .select{background:#101318;color:#e6eef6;padding:0 12px;min-width:200px}
+    .btn{background:transparent;color:var(--muted);padding:0 12px;cursor:pointer}
+    .btn.primary{background:var(--accent);color:#061017;border:none;font-weight:600}
+    .btn.clear{background:#222;color:var(--muted)}
+    .file-input{display:none}
+    .file-label{display:inline-flex;align-items:center;padding:0 12px;background:#0b6b86;color:#fff;cursor:pointer}
+    .meta{margin-left:auto;color:var(--muted);font-size:12px}
+    #chart-container{background:var(--card);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px;height:500px}
+    canvas{width:100% !important;height:100% !important}
+    .placeholder{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-size:16px;line-height:1.45;padding:0 22px}
+    .chart-title{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:12px 2px 8px;color:var(--muted);font-size:12px}
+    .regions-table{margin-top:12px;background:var(--panel);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06)}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.03);font-size:13px;color:var(--muted)}
+    th{color:#cfefff;font-weight:600}
+    tbody{display:block;max-height:200px;overflow:auto}
+    thead, tbody tr{display:table;width:100%;table-layout:fixed}
+    .remove{background:#381518;color:#ffcfcf;border:none;padding:6px 8px;border-radius:6px;cursor:pointer}
+    @media (max-width:700px){.top{flex-direction:column;align-items:stretch}.control-group,.meta{width:100%;margin-left:0}.select,.btn,.file-label{width:100%}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Equilibrium Pressure Extractor</h1>
+    <div class="subhead">Pick a station file and channel, then drag on the plot to define regions.</div>
+
+    <div class="top">
+      <label class="file-label">Load custom CSV<input id="file" class="file-input" type="file" accept=".csv" /></label>
+      <div class="control-group">
+        <label style="color:var(--muted); font-size:12px;">X axis:</label>
+        <select id="xSelect" class="select" style="min-width:150px;" disabled></select>
+      </div>
+      <div class="control-group">
+        <label style="color:var(--muted); font-size:12px;">Y axis:</label>
+        <select id="ySelect" class="select" style="min-width:150px;" disabled></select>
+      </div>
+      <button id="clearAll" class="btn clear">Clear all regions</button>
+      <button id="exportCSV" class="btn primary">Export CSV</button>
+      <button id="copyClipboard" class="btn primary" style="background:#4daf4a;">Copy to Clipboard</button>
+      <button id="resetZoom" class="btn">Reset X Zoom</button>
+    </div>
+
+    <div class="chart-title">
+      <div>Drag across the chart to add a region. Hold Shift and drag to zoom X.</div>
+      <div>Values are formatted to 8 significant figures.</div>
+    </div>
+
+    <div id="chart-container">
+      <div id="placeholder" class="placeholder">Choose a station file and click Load selected, or upload a custom CSV. The station files use time, mixture cell, and reference cell columns.</div>
+      <canvas id="chartCanvas" style="display:none"></canvas>
+    </div>
+
+    <div class="regions-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Region</th>
+            <th>x-start</th>
+            <th>x-end</th>
+            <th>mean signal</th>
+            <th>std signal</th>
+            <th>n points</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="regionsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.3.0/chart.umd.min.js"></script>
+  <script>
+    let rawData = [];
+    let originalData = [];
+    let regions = [];
+    let chart = null;
+    let dragHandlersAttached = false;
+    let isDown = false;
+    let isDownZoom = false;
+    let startPixel = null;
+    let tempBand = null;
+    let draggedRegion = null;
+    let draggedInitialValue = null;
+    let allColumns = [];
+    let selectedXColumn = 0;
+    let selectedYColumn = 1;
+    let selectedXLabel = '';
+    let selectedYLabel = '';
+
+    const fileInput = document.getElementById('file');
+    const placeholder = document.getElementById('placeholder');
+    const canvas = document.getElementById('chartCanvas');
+    const clearAllBtn = document.getElementById('clearAll');
+    const exportBtn = document.getElementById('exportCSV');
+    const copyClipboardBtn = document.getElementById('copyClipboard');
+    const resetZoomBtn = document.getElementById('resetZoom');
+    const xSelect = document.getElementById('xSelect');
+    const ySelect = document.getElementById('ySelect');
+    const regionsBody = document.getElementById('regionsBody');
+
+    fileInput.addEventListener('change', (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: true,
+        complete: (result) => loadParsed(result.data, file.name),
+        error: () => alert('Could not read the selected CSV file.')
+      });
+    });
+
+    function getRegionUnderPixel(pixelX) {
+      if (!chart) return null;
+      const xScale = chart.scales.x;
+      const value = xScale.getValueForPixel(pixelX);
+      for (let i = 0; i < regions.length; i++) {
+        const region = regions[i];
+        if (value >= region.x0 - 1e-12 && value <= region.x1 + 1e-12) {
+          const leftPixel = xScale.getPixelForValue(region.x0);
+          const rightPixel = xScale.getPixelForValue(region.x1);
+          const edgeThreshold = 8;
+          if (Math.abs(pixelX - leftPixel) < edgeThreshold) return { index: i, edge: 'left' };
+          if (Math.abs(pixelX - rightPixel) < edgeThreshold) return { index: i, edge: 'right' };
+          return { index: i, edge: 'middle' };
+        }
+      }
+      return null;
+    }
+
+    function parseTimeValue(value) {
+      if (value == null || value === '') return NaN;
+      if (typeof value === 'number') return value;
+      const str = String(value).trim();
+      if (!str) return NaN;
+      const numeric = Number(str);
+      if (Number.isFinite(numeric)) return numeric;
+      const parsedDate = Date.parse(str);
+      if (Number.isFinite(parsedDate)) return parsedDate / 1000;
+      const parsedNormalized = Date.parse(str.replace(' ', 'T'));
+      if (Number.isFinite(parsedNormalized)) return parsedNormalized / 1000;
+      const match = str.match(/(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/);
+      if (!match) return NaN;
+      const parts = match[1].split(':');
+      if (parts.length < 3) return NaN;
+      const hours = Number(parts[0]);
+      const minutes = Number(parts[1]);
+      const seconds = Number(parts[2]);
+      if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) return NaN;
+      return hours * 3600 + minutes * 60 + seconds;
+    }
+
+    function updateColumnSelectors() {
+      xSelect.innerHTML = '';
+      ySelect.innerHTML = '';
+      allColumns.forEach((col, idx) => {
+        const opt1 = document.createElement('option');
+        opt1.value = idx;
+        opt1.textContent = col;
+        if (idx === selectedXColumn) opt1.selected = true;
+        xSelect.appendChild(opt1);
+        
+        const opt2 = document.createElement('option');
+        opt2.value = idx;
+        opt2.textContent = col;
+        if (idx === selectedYColumn) opt2.selected = true;
+        ySelect.appendChild(opt2);
+      });
+      xSelect.disabled = false;
+      ySelect.disabled = false;
+    }
+
+    xSelect.addEventListener('change', () => {
+      selectedXColumn = parseInt(xSelect.value);
+      selectedXLabel = allColumns[selectedXColumn];
+      replotChart();
+    });
+
+    ySelect.addEventListener('change', () => {
+      selectedYColumn = parseInt(ySelect.value);
+      selectedYLabel = allColumns[selectedYColumn];
+      replotChart();
+    });
+
+    function replotChart() {
+      if (!allColumns || allColumns.length === 0) return;
+      if (originalData.length === 0) return;
+      const xKey = allColumns[selectedXColumn];
+      const yKey = allColumns[selectedYColumn];
+      
+      const parsedRows = [];
+      for (const row of originalData) {
+        const x = parseTimeValue(row[xKey]);
+        const y = Number(row[yKey]);
+        if (Number.isFinite(x) && Number.isFinite(y)) parsedRows.push({ x, y });
+      }
+      
+      if (parsedRows.length === 0) return;
+      parsedRows.sort((a, b) => a.x - b.x);
+      const base = parsedRows[0].x;
+      rawData = parsedRows.map((point) => ({ x: point.x - base, y: point.y }));
+      regions = [];
+      placeholder.style.display = 'none';
+      canvas.style.display = 'block';
+      createChart(selectedYLabel);
+    }
+
+    function findKey(keys, predicate) {
+      const lower = keys.map((key) => key.toLowerCase());
+      const idx = lower.findIndex(predicate);
+      return idx === -1 ? null : keys[idx];
+    }
+
+    function findTimeKey(keys) {
+      return findKey(keys, (key) => key.includes('time') || key.includes('timestamp') || key.includes('date')) || keys[0];
+    }
+
+    function loadParsed(data, sourceName) {
+      if (!data || data.length === 0) {
+        alert('CSV empty or invalid');
+        return;
+      }
+      const keys = Object.keys(data[0]);
+      if (keys.length < 2) {
+        alert('CSV must have at least two columns');
+        return;
+      }
+      originalData = data;
+      allColumns = keys;
+      selectedXColumn = 0;
+      selectedYColumn = Math.min(1, keys.length - 1);
+      selectedXLabel = keys[selectedXColumn];
+      selectedYLabel = keys[selectedYColumn];
+      updateColumnSelectors();
+      
+      const timeKey = allColumns[selectedXColumn];
+      const signalKey = allColumns[selectedYColumn];
+      if (!timeKey || !signalKey) {
+        alert('Could not identify the time or signal columns in ' + sourceName);
+        return;
+      }
+      const parsedRows = [];
+      for (const row of data) {
+        const x = parseTimeValue(row[timeKey]);
+        const y = Number(row[signalKey]);
+        if (Number.isFinite(x) && Number.isFinite(y)) parsedRows.push({ x, y });
+      }
+      if (parsedRows.length === 0) {
+        alert('No numeric data found in ' + sourceName);
+        return;
+      }
+      parsedRows.sort((a, b) => a.x - b.x);
+      const base = parsedRows[0].x;
+      rawData = parsedRows.map((point) => ({ x: point.x - base, y: point.y }));
+      regions = [];
+      placeholder.style.display = 'none';
+      canvas.style.display = 'block';
+      createChart(signalKey);
+    }
+
+    function createChart(signalLabel) {
+      if (chart) chart.destroy();
+      const ctx = canvas.getContext('2d');
+      const ds = {
+        label: signalLabel,
+        data: rawData.map((point) => ({ x: point.x, y: point.y })),
+        borderColor: '#bfefff',
+        backgroundColor: 'rgba(79,195,247,0.15)',
+        tension: 0.05,
+        pointRadius: 0
+      };
+
+      const regionPlugin = {
+        id: 'regionPlugin',
+        afterDatasetsDraw(chartInstance) {
+          const drawCtx = chartInstance.ctx;
+          const xScale = chartInstance.scales.x;
+          const chartArea = chartInstance.chartArea;
+          regions.forEach((region) => {
+            const left = xScale.getPixelForValue(region.x0);
+            const right = xScale.getPixelForValue(region.x1);
+            drawCtx.save();
+            drawCtx.fillStyle = region.color;
+            drawCtx.fillRect(Math.min(left, right), chartArea.top, Math.abs(right - left), chartArea.bottom - chartArea.top);
+            drawCtx.restore();
+          });
+          if (tempBand) {
+            const left = xScale.getPixelForValue(tempBand.x0);
+            const right = xScale.getPixelForValue(tempBand.x1);
+            drawCtx.save();
+            drawCtx.fillStyle = tempBand.color;
+            drawCtx.fillRect(Math.min(left, right), chartArea.top, Math.abs(right - left), chartArea.bottom - chartArea.top);
+            drawCtx.restore();
+          }
+        }
+      };
+
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets: [ds] },
+        options: {
+          maintainAspectRatio: false,
+          scales: {
+            x: { type: 'linear', ticks: { color: '#bcd7e6' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+            y: { ticks: { color: '#bcd7e6' }, grid: { color: 'rgba(255,255,255,0.03)' } }
+          },
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          interaction: { mode: 'nearest', intersect: false }
+        },
+        plugins: [regionPlugin]
+      });
+      setupDrag();
+      updateRegionsTable();
+    }
+
+    function setupDrag() {
+      if (dragHandlersAttached) return;
+      dragHandlersAttached = true;
+      const canvasEl = chart.canvas;
+      canvasEl.onmousedown = (event) => {
+        if (!rawData || rawData.length === 0) return;
+        const isShift = event.shiftKey;
+        const regionInfo = getRegionUnderPixel(event.offsetX);
+        if (isShift) {
+          // start an X-axis zoom drag (Shift + drag)
+          isDownZoom = true;
+          startPixel = event.offsetX;
+          tempBand = null;
+        } else if (regionInfo) {
+          // existing region drag/resize
+          draggedRegion = regionInfo;
+          draggedInitialValue = regionInfo.edge === 'left' ? regions[regionInfo.index].x0 : regionInfo.edge === 'right' ? regions[regionInfo.index].x1 : { x0: regions[regionInfo.index].x0, x1: regions[regionInfo.index].x1 };
+        } else {
+          // create a new signal region
+          isDown = true;
+          startPixel = event.offsetX;
+          tempBand = null;
+        }
+        chart.draw();
+      };
+      canvasEl.onmousemove = (event) => {
+        const regionInfo = getRegionUnderPixel(event.offsetX);
+        const edgeThreshold = 8;
+        if (!isDownZoom && !isDown && !draggedRegion) {
+          if (regionInfo) {
+            const region = regions[regionInfo.index];
+            const leftPixel = chart.scales.x.getPixelForValue(region.x0);
+            const rightPixel = chart.scales.x.getPixelForValue(region.x1);
+            if (Math.abs(event.offsetX - leftPixel) < edgeThreshold || Math.abs(event.offsetX - rightPixel) < edgeThreshold) {
+              canvasEl.style.cursor = 'ew-resize';
+            } else {
+              canvasEl.style.cursor = 'grab';
+            }
+          } else {
+            canvasEl.style.cursor = 'crosshair';
+          }
+        }
+
+        if (isDownZoom) {
+          // show zoom band while Shift-dragging
+          const x0 = chart.scales.x.getValueForPixel(startPixel);
+          const x1 = chart.scales.x.getValueForPixel(event.offsetX);
+          tempBand = { x0, x1, color: 'rgba(200,200,200,0.18)' };
+          canvasEl.style.cursor = 'zoom-in';
+          chart.draw();
+        } else if (draggedRegion) {
+          const newValue = chart.scales.x.getValueForPixel(event.offsetX);
+          const region = regions[draggedRegion.index];
+          if (draggedRegion.edge === 'left') {
+            region.x0 = Math.min(newValue, region.x1);
+          } else if (draggedRegion.edge === 'right') {
+            region.x1 = Math.max(newValue, region.x0);
+          } else {
+            const delta = newValue - draggedInitialValue.x0;
+            region.x0 = draggedInitialValue.x0 + delta;
+            region.x1 = draggedInitialValue.x1 + delta;
+          }
+          updateRegionsTable();
+          chart.draw();
+        } else if (isDown) {
+          const x0 = chart.scales.x.getValueForPixel(startPixel);
+          const x1 = chart.scales.x.getValueForPixel(event.offsetX);
+          tempBand = { x0, x1, color: 'rgba(120,180,255,0.28)' };
+          chart.draw();
+        }
+      };
+      window.addEventListener('mouseup', () => {
+        if (draggedRegion) {
+          draggedRegion = null;
+          draggedInitialValue = null;
+          chart.draw();
+          return;
+        }
+
+        if (isDownZoom) {
+          // finalize zoom
+          isDownZoom = false;
+          if (tempBand) {
+            const min = Math.min(tempBand.x0, tempBand.x1);
+            const max = Math.max(tempBand.x0, tempBand.x1);
+            // apply to Chart.js x scale
+            if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
+              chart.options.scales.x.min = min;
+              chart.options.scales.x.max = max;
+              chart.update();
+            }
+          }
+          tempBand = null;
+          return;
+        }
+
+        if (isDown) {
+          isDown = false;
+          if (!tempBand) {
+            chart.draw();
+            return;
+          }
+          addRegionFromBand(tempBand.x0, tempBand.x1);
+          tempBand = null;
+          chart.draw();
+        }
+      });
+    }
+
+    function addRegionFromBand(a, b) {
+      if (!rawData || rawData.length === 0) return;
+      const dataMin = rawData[0].x;
+      const dataMax = rawData[rawData.length - 1].x;
+      let x0 = Math.min(a, b);
+      let x1 = Math.max(a, b);
+      if (x1 < dataMin || x0 > dataMax) return;
+      x0 = Math.max(x0, dataMin);
+      x1 = Math.min(x1, dataMax);
+      regions.push({ x0, x1, color: genColor(regions.length) });
+      updateRegionsTable();
+    }
+
+    function computeStatsForRegion(region) {
+      const points = rawData.filter((point) => point.x >= region.x0 - 1e-12 && point.x <= region.x1 + 1e-12).map((point) => point.y);
+      const n = points.length;
+      if (n === 0) return { n: 0, mean: NaN, std: NaN };
+      const mean = points.reduce((sum, value) => sum + value, 0) / n;
+      let std = NaN;
+      if (n > 1) {
+        const variance = points.reduce((sum, value) => sum + (value - mean) * (value - mean), 0) / (n - 1);
+        std = Math.sqrt(variance);
+      }
+      return { n, mean, std };
+    }
+
+    function formatSig(value) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
+      return Number(value).toPrecision(8);
+    }
+
+    function genColor(i) {
+      const h = (i * 47) % 360;
+      return `hsla(${h},85%,60%,0.35)`;
+    }
+
+    function updateRegionsTable() {
+      regionsBody.innerHTML = '';
+      regions.forEach((region, idx) => {
+        const stats = computeStatsForRegion(region);
+        const x_start_idx = getIndexForX(region.x0);
+        const x_end_idx = getIndexForX(region.x1);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>Region ${idx + 1}</td>
+          <td>${x_start_idx}</td>
+          <td>${x_end_idx}</td>
+          <td>${stats.n >= 1 ? formatSig(stats.mean) : '-'}</td>
+          <td>${stats.n > 1 ? formatSig(stats.std) : '-'}</td>
+          <td>${stats.n}</td>
+          <td><button class="remove" data-idx="${idx}">Remove</button></td>`;
+        regionsBody.appendChild(tr);
+      });
+      regionsBody.querySelectorAll('.remove').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          const index = Number(event.currentTarget.dataset.idx);
+          regions.splice(index, 1);
+          updateRegionsTable();
+          if (chart) chart.draw();
+        });
+      });
+    }
+
+    clearAllBtn.addEventListener('click', () => {
+      regions = [];
+      updateRegionsTable();
+      if (chart) chart.draw();
+    });
+
+    resetZoomBtn.addEventListener('click', () => {
+      if (!chart || !chart.options || !chart.options.scales || !chart.options.scales.x) return;
+      delete chart.options.scales.x.min;
+      delete chart.options.scales.x.max;
+      chart.update();
+    });
+
+    function getIndexForX(xValue) {
+      if (!rawData || rawData.length === 0) return 0;
+      let closestIdx = 0;
+      let closestDist = Math.abs(rawData[0].x - xValue);
+      for (let i = 1; i < rawData.length; i++) {
+        const dist = Math.abs(rawData[i].x - xValue);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestIdx = i;
+        }
+      }
+      return closestIdx;
+    }
+
+    function generateExportCSV() {
+      if (regions.length === 0) {
+        return null;
+      }
+      const sortedRegions = [...regions].sort((a, b) => a.x0 - b.x0);
+      const lines = ['region,x_start,x_end,mean_signal,std_signal,n_points'];
+      sortedRegions.forEach((region, idx) => {
+        const stats = computeStatsForRegion(region);
+        const x_start_idx = getIndexForX(region.x0);
+        const x_end_idx = getIndexForX(region.x1);
+        lines.push([
+          idx + 1,
+          x_start_idx,
+          x_end_idx,
+          stats.n >= 1 ? formatSig(stats.mean) : '',
+          stats.n > 1 ? formatSig(stats.std) : '',
+          stats.n
+        ].join(','));
+      });
+      return lines.join('\n');
+    }
+
+    function generateExportTSV() {
+      if (regions.length === 0) return null;
+      const sortedRegions = [...regions].sort((a, b) => a.x0 - b.x0);
+      const lines = ['region\tx_start\tx_end\tmean_signal\tstd_signal\tn_points'];
+      sortedRegions.forEach((region, idx) => {
+        const stats = computeStatsForRegion(region);
+        const x_start_idx = getIndexForX(region.x0);
+        const x_end_idx = getIndexForX(region.x1);
+        lines.push([
+          idx + 1,
+          x_start_idx,
+          x_end_idx,
+          stats.n >= 1 ? formatSig(stats.mean) : '',
+          stats.n > 1 ? formatSig(stats.std) : '',
+          stats.n
+        ].join('\t'));
+      });
+      return lines.join('\n');
+    }
+
+    exportBtn.addEventListener('click', async () => {
+      const csvContent = generateExportCSV();
+      if (!csvContent) {
+        alert('No regions to export');
+        return;
+      }
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: 'equilibrium_signal_regions.csv',
+            types: [{ description: 'CSV Files', accept: { 'text/csv': ['.csv'] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } catch (err) {
+          if (err.name !== 'AbortError') console.error(err);
+        }
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'equilibrium_signal_regions.csv';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+    });
+
+    copyClipboardBtn.addEventListener('click', () => {
+      const tsv = generateExportTSV();
+      if (!tsv) {
+        alert('No regions to export');
+        return;
+      }
+      navigator.clipboard.writeText(tsv).then(() => {
+        copyClipboardBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyClipboardBtn.textContent = 'Copy to Clipboard';
+        }, 2000);
+      }).catch(() => {
+        alert('Could not copy to clipboard');
+      });
+    });
+  </script>
+</body>
+</html>
