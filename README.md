@@ -52,7 +52,7 @@ The exported CSV contains:
 - `std_signal`: Standard deviation of signal in region
 - `n_points`: Number of data points in region
 
-All values are formatted to 8 significant figures.
+All values are formatted to 6 significant figures by default. The user may modify this from a drop-down menu.
 
 ## Technologies
 
