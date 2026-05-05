@@ -21,6 +21,7 @@ An interactive web-based tool for easily analyzing VLE (Vapor-Liquid Equilibrium
 - **Export Results**: 
   - Export region statistics as a CSV file with save dialog
   - Copy results directly to clipboard (paste-able into Excel/Google Sheets!)
+  - Select how many significant figures to export from a drop down menu
 
 ## Usage
 
