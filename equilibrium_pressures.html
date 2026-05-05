@@ -49,6 +49,16 @@
         <label style="color:var(--muted); font-size:12px;">Y axis:</label>
         <select id="ySelect" class="select" style="min-width:150px;" disabled></select>
       </div>
+      <div class="control-group">
+        <label style="color:var(--muted); font-size:12px;">Sig figs:</label>
+        <select id="sigfigSelect" class="select" style="min-width:110px;">
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="6" selected>6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+        </select>
+      </div>
       <button id="clearAll" class="btn clear">Clear all regions</button>
       <button id="exportCSV" class="btn primary">Export CSV</button>
       <button id="copyClipboard" class="btn primary" style="background:#4daf4a;">Copy to Clipboard</button>
@@ -57,7 +67,7 @@
 
     <div class="chart-title">
       <div>Drag across the chart to add a region. Hold Shift and drag to zoom X.</div>
-      <div>Values are formatted to 8 significant figures.</div>
+      <div><span id="sigfigNote">Values are formatted to 6 significant figures.</span></div>
     </div>
 
     <div id="chart-container">
@@ -102,6 +112,7 @@
     let selectedYColumn = 1;
     let selectedXLabel = '';
     let selectedYLabel = '';
+    let selectedSigFigs = 6;
 
     const fileInput = document.getElementById('file');
     const placeholder = document.getElementById('placeholder');
@@ -112,7 +123,10 @@
     const resetZoomBtn = document.getElementById('resetZoom');
     const xSelect = document.getElementById('xSelect');
     const ySelect = document.getElementById('ySelect');
+    const sigfigSelect = document.getElementById('sigfigSelect');
+    const sigfigNote = document.getElementById('sigfigNote');
     const regionsBody = document.getElementById('regionsBody');
+    sigfigSelect.value = '6';
 
     fileInput.addEventListener('change', (event) => {
       const file = event.target.files && event.target.files[0];
@@ -196,6 +210,13 @@
       selectedYColumn = parseInt(ySelect.value);
       selectedYLabel = allColumns[selectedYColumn];
       replotChart();
+    });
+
+    sigfigSelect.addEventListener('change', () => {
+      selectedSigFigs = parseInt(sigfigSelect.value, 10);
+      sigfigNote.textContent = `Values are formatted to ${selectedSigFigs} significant figures.`;
+      updateRegionsTable();
+      if (chart) chart.draw();
     });
 
     function replotChart() {
@@ -466,7 +487,7 @@
 
     function formatSig(value) {
       if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
-      return Number(value).toPrecision(8);
+      return Number(value).toPrecision(selectedSigFigs);
     }
 
     function genColor(i) {
