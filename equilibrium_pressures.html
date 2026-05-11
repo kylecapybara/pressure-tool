@@ -63,7 +63,22 @@
       <button id="exportCSV" class="btn primary">Export CSV</button>
       <button id="copyClipboard" class="btn primary" style="background:#4daf4a;">Copy to Clipboard</button>
       <button id="resetZoom" class="btn">Reset X Zoom</button>
-      <a id="docsLink" class="btn" href="https://kylecapybara.github.io/pressure-tool/" target="_blank" rel="noopener noreferrer">Docs</a>
+      <label style="display:flex;align-items:center;gap:8px;">
+        <input id="enableCorrection" type="checkbox" style="width:16px;height:16px;" />
+        <span style="color:var(--muted);font-size:13px">Linear correction</span>
+      </label>
+      <div class="control-group" style="align-items:center;gap:4px;">
+        <label style="color:var(--muted); font-size:12px;">Slope (m):</label>
+        <input id="slopeSlider" type="range" min="0" max="0.005" step="0.00001" value="0" style="width:150px" />
+        <input id="slopeValue" type="text" value="0.0000" style="width:70px;padding:4px;background:#101318;color:#e6eef6;border:1px solid #2b2f33;border-radius:4px;font-size:12px;" />
+      </div>
+      <div class="control-group" style="align-items:center;gap:4px;">
+        <label style="color:var(--muted); font-size:12px;">Range:</label>
+        <input id="sliderMin" type="number" value="0" step="0.0001" style="width:60px;padding:4px;background:#101318;color:#e6eef6;border:1px solid #2b2f33;border-radius:4px;font-size:12px;" placeholder="min" />
+        <span style="color:var(--muted);">to</span>
+        <input id="sliderMax" type="number" value="0.005" step="0.0001" style="width:60px;padding:4px;background:#101318;color:#e6eef6;border:1px solid #2b2f33;border-radius:4px;font-size:12px;" placeholder="max" />
+      </div>
+      <button id="resetCorrection" class="btn">Reset correction</button>
     </div>
 
     <div class="chart-title">
@@ -92,6 +107,9 @@
         <tbody id="regionsBody"></tbody>
       </table>
     </div>
+    <div style="margin-top:18px;text-align:center;">
+      <a id="docsLink" class="btn" href="https://kylecapybara.github.io/pressure-tool/" target="_blank" rel="noopener noreferrer">Documentation</a>
+    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
@@ -114,6 +132,11 @@
     let selectedXLabel = '';
     let selectedYLabel = '';
     let selectedSigFigs = 6;
+    // parsedOriginal stores the unmodified parsed data with x relative to base
+    let parsedOriginal = [];
+    // correction state
+    let correction = { enabled: false, slope: 0, intercept: 0, startX: 0 };
+    let draggingStartBar = false;
 
     const fileInput = document.getElementById('file');
     const placeholder = document.getElementById('placeholder');
@@ -127,6 +150,12 @@
     const sigfigSelect = document.getElementById('sigfigSelect');
     const sigfigNote = document.getElementById('sigfigNote');
     const regionsBody = document.getElementById('regionsBody');
+    const enableCorrection = document.getElementById('enableCorrection');
+    const slopeSlider = document.getElementById('slopeSlider');
+    const slopeValue = document.getElementById('slopeValue');
+    const sliderMin = document.getElementById('sliderMin');
+    const sliderMax = document.getElementById('sliderMax');
+    const resetCorrectionBtn = document.getElementById('resetCorrection');
     sigfigSelect.value = '6';
 
     fileInput.addEventListener('change', (event) => {
@@ -226,20 +255,24 @@
       const xKey = allColumns[selectedXColumn];
       const yKey = allColumns[selectedYColumn];
       
+      // rebuild parsedOriginal and rawData from originalData
       const parsedRows = [];
       for (const row of originalData) {
         const x = parseTimeValue(row[xKey]);
         const y = Number(row[yKey]);
         if (Number.isFinite(x) && Number.isFinite(y)) parsedRows.push({ x, y });
       }
-      
       if (parsedRows.length === 0) return;
       parsedRows.sort((a, b) => a.x - b.x);
       const base = parsedRows[0].x;
-      rawData = parsedRows.map((point) => ({ x: point.x - base, y: point.y }));
+      parsedOriginal = parsedRows.map((point) => ({ x: point.x - base, y: point.y }));
+      rawData = parsedOriginal.map((p) => ({ x: p.x, y: p.y }));
       regions = [];
       placeholder.style.display = 'none';
       canvas.style.display = 'block';
+      // default startX to beginning of data
+      correction.startX = parsedOriginal.length ? parsedOriginal[0].x : 0;
+      applyLinearCorrection();
       createChart(selectedYLabel);
     }
 
@@ -289,10 +322,13 @@
       }
       parsedRows.sort((a, b) => a.x - b.x);
       const base = parsedRows[0].x;
-      rawData = parsedRows.map((point) => ({ x: point.x - base, y: point.y }));
+      parsedOriginal = parsedRows.map((point) => ({ x: point.x - base, y: point.y }));
+      rawData = parsedOriginal.map((p) => ({ x: p.x, y: p.y }));
       regions = [];
       placeholder.style.display = 'none';
       canvas.style.display = 'block';
+      correction.startX = parsedOriginal.length ? parsedOriginal[0].x : 0;
+      applyLinearCorrection();
       createChart(signalKey);
     }
 
@@ -330,6 +366,28 @@
             drawCtx.fillRect(Math.min(left, right), chartArea.top, Math.abs(right - left), chartArea.bottom - chartArea.top);
             drawCtx.restore();
           }
+          // draw startX vertical bar if correction enabled
+          if (correction && typeof correction.startX === 'number') {
+            const px = xScale.getPixelForValue(correction.startX);
+            drawCtx.save();
+            drawCtx.strokeStyle = 'rgba(255,200,100,0.9)';
+            drawCtx.lineWidth = 2;
+            drawCtx.beginPath();
+            drawCtx.moveTo(px, chartArea.top);
+            drawCtx.lineTo(px, chartArea.bottom);
+            drawCtx.stroke();
+            // small handle
+            drawCtx.fillStyle = 'rgba(255,200,100,0.95)';
+            drawCtx.fillRect(px - 4, chartArea.top + 6, 8, 18);
+            drawCtx.restore();
+          }
+        }
+      };
+
+      const verticalBarPlugin = {
+        id: 'verticalBarPlugin',
+        afterDatasetsDraw(chartInstance) {
+          // kept for potential future layering; drawing done in regionPlugin currently
         }
       };
 
@@ -345,7 +403,7 @@
           plugins: { legend: { display: false }, tooltip: { enabled: false } },
           interaction: { mode: 'nearest', intersect: false }
         },
-        plugins: [regionPlugin]
+        plugins: [regionPlugin, verticalBarPlugin]
       });
       setupDrag();
       updateRegionsTable();
@@ -358,8 +416,14 @@
       canvasEl.onmousedown = (event) => {
         if (!rawData || rawData.length === 0) return;
         const isShift = event.shiftKey;
+        const barPixel = (chart && chart.scales && chart.scales.x) ? chart.scales.x.getPixelForValue(correction.startX) : null;
+        const nearBar = barPixel !== null && Math.abs(event.offsetX - barPixel) < 8;
         const regionInfo = getRegionUnderPixel(event.offsetX);
-        if (isShift) {
+        if (nearBar) {
+          // start dragging the startX bar
+          draggingStartBar = true;
+          correction.enabled = true;
+        } else if (isShift) {
           // start an X-axis zoom drag (Shift + drag)
           isDownZoom = true;
           startPixel = event.offsetX;
@@ -401,6 +465,14 @@
           tempBand = { x0, x1, color: 'rgba(200,200,200,0.18)' };
           canvasEl.style.cursor = 'zoom-in';
           chart.draw();
+        } else if (draggingStartBar) {
+          // update startX while dragging the bar
+          const newStart = chart.scales.x.getValueForPixel(event.offsetX);
+          correction.startX = newStart;
+          // recompute intercept so line passes through data at startX
+          computeIntercept();
+          applyLinearCorrection();
+          chart.draw();
         } else if (draggedRegion) {
           const newValue = chart.scales.x.getValueForPixel(event.offsetX);
           const region = regions[draggedRegion.index];
@@ -423,6 +495,15 @@
         }
       };
       window.addEventListener('mouseup', () => {
+        if (draggingStartBar) {
+          draggingStartBar = false;
+          // ensure intercept updated and correction applied
+          computeIntercept();
+          applyLinearCorrection();
+          chart.draw();
+          return;
+        }
+
         if (draggedRegion) {
           draggedRegion = null;
           draggedInitialValue = null;
@@ -471,6 +552,44 @@
       x1 = Math.min(x1, dataMax);
       regions.push({ x0, x1, color: genColor(regions.length) });
       updateRegionsTable();
+    }
+
+    // rebuild rawData from parsedOriginal (unmodified) and apply correction if enabled
+    function applyLinearCorrection() {
+      if (!parsedOriginal || parsedOriginal.length === 0) return;
+      // start from the unmodified parsedOriginal
+      rawData = parsedOriginal.map((p) => ({ x: p.x, y: p.y }));
+      if (!correction.enabled) {
+        // update chart dataset and return
+        if (chart && chart.data && chart.data.datasets && chart.data.datasets[0]) {
+          chart.data.datasets[0].data = rawData.map((p) => ({ x: p.x, y: p.y }));
+          chart.update();
+        }
+        updateRegionsTable();
+        return;
+      }
+      // ensure intercept is computed
+      computeIntercept();
+      const m = Number(correction.slope) || 0;
+      const b = Number(correction.intercept) || 0;
+      const sx = Number(correction.startX) || 0;
+      for (let i = 0; i < rawData.length; i++) {
+        if (rawData[i].x >= sx - 1e-12) {
+          rawData[i].y = rawData[i].y - (m * rawData[i].x + b);
+        }
+      }
+      if (chart && chart.data && chart.data.datasets && chart.data.datasets[0]) {
+        chart.data.datasets[0].data = rawData.map((p) => ({ x: p.x, y: p.y }));
+        chart.update();
+      }
+      updateRegionsTable();
+    }
+
+    function computeIntercept() {
+      // compute intercept b such that correction = 0 at startX
+      // this way the y-value at startX remains unchanged when correction is applied
+      // correction at x: m*x + b, so at startX: m*startX + b = 0 => b = -m*startX
+      correction.intercept = -correction.slope * correction.startX;
     }
 
     function computeStatsForRegion(region) {
@@ -638,6 +757,76 @@
       }).catch(() => {
         alert('Could not copy to clipboard');
       });
+    });
+
+    // Hook up correction UI
+    enableCorrection.addEventListener('change', (e) => {
+      correction.enabled = !!e.currentTarget.checked;
+      // when enabling, ensure intercept and apply
+      if (correction.enabled) computeIntercept();
+      applyLinearCorrection();
+    });
+
+    slopeSlider.addEventListener('input', (e) => {
+      const v = Number(e.currentTarget.value);
+      correction.slope = v;
+      slopeValue.value = v.toFixed(4);
+      // update intercept so no discontinuity
+      computeIntercept();
+      applyLinearCorrection();
+    });
+
+    slopeValue.addEventListener('change', (e) => {
+      let v = Number(e.currentTarget.value);
+      if (!Number.isFinite(v)) v = 0;
+      // clamp to slider bounds
+      const min = Number(sliderMin.value) || -10;
+      const max = Number(sliderMax.value) || 10;
+      v = Math.max(min, Math.min(max, v));
+      correction.slope = v;
+      slopeSlider.value = v;
+      slopeValue.value = v.toFixed(4);
+      computeIntercept();
+      applyLinearCorrection();
+    });
+
+    sliderMin.addEventListener('change', (e) => {
+      let minVal = Number(e.currentTarget.value);
+      if (!Number.isFinite(minVal)) minVal = 0;
+      slopeSlider.min = minVal;
+      // if current slope is below new min, adjust it
+      if (correction.slope < minVal) {
+        correction.slope = minVal;
+        slopeSlider.value = minVal;
+        slopeValue.value = minVal.toFixed(4);
+        computeIntercept();
+        applyLinearCorrection();
+      }
+    });
+
+    sliderMax.addEventListener('change', (e) => {
+      let maxVal = Number(e.currentTarget.value);
+      if (!Number.isFinite(maxVal)) maxVal = 0.005;
+      slopeSlider.max = maxVal;
+      // if current slope is above new max, adjust it
+      if (correction.slope > maxVal) {
+        correction.slope = maxVal;
+        slopeSlider.value = maxVal;
+        slopeValue.value = maxVal.toFixed(4);
+        computeIntercept();
+        applyLinearCorrection();
+      }
+    });
+
+    resetCorrectionBtn.addEventListener('click', () => {
+      correction.enabled = false;
+      correction.slope = 0;
+      slopeSlider.value = '0';
+      slopeValue.value = '0.0000';
+      correction.intercept = 0;
+      correction.startX = parsedOriginal.length ? parsedOriginal[0].x : 0;
+      enableCorrection.checked = false;
+      applyLinearCorrection();
     });
   </script>
 </body>
