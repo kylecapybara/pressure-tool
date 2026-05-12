@@ -1,6 +1,14 @@
 ---
 title: "Equilibrium Pressure Extractor: Technical Documentation"
-author: "Pressure Tool"
+author:
+  - name: Kyle Wodehouse
+    affiliations:
+      - name: University of Delaware
+        city: Newark
+        state: DE
+      - name: DuPont Water Solutions
+        city: Wilmington
+        state: DE
 date: last-modified
 format:
   html:
