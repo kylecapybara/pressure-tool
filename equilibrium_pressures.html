@@ -61,6 +61,7 @@
       </div>
       <button id="clearAll" class="btn clear">Clear all regions</button>
       <button id="exportCSV" class="btn primary">Export CSV</button>
+      <button id="downloadImage" class="btn">Download Image</button>
       <button id="copyClipboard" class="btn primary" style="background:#4daf4a;">Copy to Clipboard</button>
       <button id="resetZoom" class="btn">Reset X Zoom</button>
       <label style="display:flex;align-items:center;gap:8px;">
@@ -147,6 +148,7 @@
     const canvas = document.getElementById('chartCanvas');
     const clearAllBtn = document.getElementById('clearAll');
     const exportBtn = document.getElementById('exportCSV');
+    const downloadImageBtn = document.getElementById('downloadImage');
     const copyClipboardBtn = document.getElementById('copyClipboard');
     const resetZoomBtn = document.getElementById('resetZoom');
     const xSelect = document.getElementById('xSelect');
@@ -769,9 +771,7 @@
     }
 
     function generateExportCSV() {
-      if (regions.length === 0) {
-        return null;
-      }
+      // Build region summary first (keep existing behavior)
       const sortedRegions = [...regions].sort((a, b) => a.x0 - b.x0);
       const lines = ['region,x_start,x_end,mean_signal,std_signal,n_points'];
       sortedRegions.forEach((region, idx) => {
@@ -787,6 +787,25 @@
           stats.n
         ].join(','));
       });
+
+      // Append a blank line and then the full dataset (x,y,region_id)
+      lines.push('');
+      lines.push('x,y,region_id');
+      if (rawData && rawData.length) {
+        for (let i = 0; i < rawData.length; i++) {
+          const pt = rawData[i];
+          let regionId = '';
+          for (let r = 0; r < regions.length; r++) {
+            const reg = regions[r];
+            if (pt.x >= reg.x0 && pt.x <= reg.x1) {
+              regionId = String(r + 1);
+              break;
+            }
+          }
+          const yFormatted = Number.isFinite(pt.y) ? formatSig(pt.y) : '';
+          lines.push([pt.x, yFormatted, regionId].join(','));
+        }
+      }
       return lines.join('\n');
     }
 
@@ -813,8 +832,19 @@
     exportBtn.addEventListener('click', async () => {
       const csvContent = generateExportCSV();
       if (!csvContent) {
-        alert('No regions to export');
-        return;
+        // If there are no regions, still offer full dataset export if available
+        if (!rawData || rawData.length === 0) {
+          alert('No data to export');
+          return;
+        }
+        // generate CSV with only full dataset (no regions)
+        const lines = ['x,y,region_id'];
+        for (let i = 0; i < rawData.length; i++) {
+          const pt = rawData[i];
+          const yFormatted = Number.isFinite(pt.y) ? formatSig(pt.y) : '';
+          lines.push([pt.x, yFormatted, ''].join(','));
+        }
+        csvContent = lines.join('\n');
       }
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       
@@ -856,6 +886,44 @@
       }).catch(() => {
         alert('Could not copy to clipboard');
       });
+    });
+
+    // Download chart as high-DPI PNG
+    downloadImageBtn.addEventListener('click', () => {
+      if (!chart || !chart.canvas) {
+        alert('No chart to export');
+        return;
+      }
+      // desired DPI
+      const targetDpi = 300;
+      const defaultDpi = 96; // browser CSS baseline
+      const scale = Math.max(1, Math.ceil(targetDpi / defaultDpi));
+
+      const srcCanvas = chart.canvas;
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = srcCanvas.width * scale;
+      exportCanvas.height = srcCanvas.height * scale;
+      const ctx = exportCanvas.getContext('2d');
+      // draw white background for better visibility when used in other viewers
+      ctx.fillStyle = window.getComputedStyle(document.body).backgroundColor || '#ffffff';
+      ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      // draw scaled chart
+      ctx.drawImage(srcCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+
+      exportCanvas.toBlob((blob) => {
+        if (!blob) {
+          alert('Could not create image');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'equilibrium_plot.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }, 'image/png');
     });
 
     // Hook up correction UI
