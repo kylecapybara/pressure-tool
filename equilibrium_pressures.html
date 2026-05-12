@@ -136,7 +136,7 @@
     // parsedOriginal stores the unmodified parsed data with x relative to base
     let parsedOriginal = [];
     // correction state
-    let correction = { enabled: false, slope: 0, intercept: 0, startX: 0 };
+    let correction = { enabled: false, slope: 0, intercept: 0, startX: 0, startTouched: false };
     let draggingStartBar = false;
     // undo stack: store snapshots of mutable state
     const undoStack = [];
@@ -249,6 +249,15 @@
     function updateCorrectionControlsVisibility() {
       const visible = enableCorrection.checked;
       correctionControls.style.display = visible ? 'flex' : 'none';
+      resetCorrectionBtn.style.display = visible ? '' : 'none';
+    }
+
+    function getVisibleXWindowStart() {
+      if (chart && chart.scales && chart.scales.x && Number.isFinite(chart.scales.x.min)) {
+        return chart.scales.x.min;
+      }
+      if (parsedOriginal && parsedOriginal.length) return parsedOriginal[0].x;
+      return 0;
     }
 
     function getRegionUnderPixel(pixelX) {
@@ -353,6 +362,7 @@
       canvas.style.display = 'block';
       // default startX to beginning of data
       correction.startX = parsedOriginal.length ? parsedOriginal[0].x : 0;
+      correction.startTouched = false;
       applyLinearCorrection();
       createChart(selectedYLabel);
     }
@@ -409,6 +419,7 @@
       placeholder.style.display = 'none';
       canvas.style.display = 'block';
       correction.startX = parsedOriginal.length ? parsedOriginal[0].x : 0;
+      correction.startTouched = false;
       applyLinearCorrection();
       createChart(signalKey);
     }
@@ -447,8 +458,8 @@
             drawCtx.fillRect(Math.min(left, right), chartArea.top, Math.abs(right - left), chartArea.bottom - chartArea.top);
             drawCtx.restore();
           }
-          // draw startX vertical bar if correction enabled
-          if (correction && typeof correction.startX === 'number') {
+          // draw startX vertical bar only when correction is enabled
+          if (correction && correction.enabled && typeof correction.startX === 'number') {
             const px = xScale.getPixelForValue(correction.startX);
             drawCtx.save();
             drawCtx.strokeStyle = 'rgba(255,200,100,0.9)';
@@ -498,13 +509,13 @@
         if (!rawData || rawData.length === 0) return;
         const isShift = event.shiftKey;
         const barPixel = (chart && chart.scales && chart.scales.x) ? chart.scales.x.getPixelForValue(correction.startX) : null;
-        const nearBar = barPixel !== null && Math.abs(event.offsetX - barPixel) < 8;
+        const nearBar = !!correction.enabled && barPixel !== null && Math.abs(event.offsetX - barPixel) < 8;
         const regionInfo = getRegionUnderPixel(event.offsetX);
         if (nearBar) {
           // start dragging the startX bar
           pushUndo();
           draggingStartBar = true;
-          correction.enabled = true;
+          correction.startTouched = true;
         } else if (isShift) {
           // start an X-axis zoom drag (Shift + drag)
           pushUndo();
@@ -851,7 +862,11 @@
     enableCorrection.addEventListener('change', (e) => {
       correction.enabled = !!e.currentTarget.checked;
       // when enabling, ensure intercept and apply
-      if (correction.enabled) computeIntercept();
+      if (correction.enabled) {
+        // Until the user has moved the start bar, anchor it to the visible window start.
+        if (!correction.startTouched) correction.startX = getVisibleXWindowStart();
+        computeIntercept();
+      }
       applyLinearCorrection();
       updateCorrectionControlsVisibility();
     });
@@ -919,9 +934,9 @@
       slopeSlider.value = '0';
       slopeValue.value = '0.0000';
       correction.intercept = 0;
-      correction.startX = parsedOriginal.length ? parsedOriginal[0].x : 0;
       enableCorrection.checked = false;
       applyLinearCorrection();
+      updateCorrectionControlsVisibility();
     });
     // initialize visibility of correction controls
     updateCorrectionControlsVisibility();
