@@ -78,7 +78,12 @@ The tool automatically detects and lists all CSV columns. You can:
 
 ## Documentation
 
-For detailed *technical* documentation including the mathematical model, architecture, and implementation details, see **[DOCUMENTATION](https://kylecapybara.github.io/pressure-tool/DOCUMENTATION.html)** webpage. or [DOCUMENTATION.qmd](DOCUMENTATION.qmd) or or [DOCUMENTATION.pdf](DOCUMENTATION.pdf).
+For documentation, see:
+
+- [Documentation (web)](https://kylecapybara.github.io/pressure-tool/) — user-facing guide and quick usage notes
+- [Technical documentation (hosted)](https://kylecapybara.github.io/pressure-tool/DOCUMENTATION.html) — in-depth derivation, architecture, and implementation details
+- [DOCUMENTATION.qmd](DOCUMENTATION.qmd) — source Quarto document (render to HTML/PDF locally)
+- [DOCUMENTATION.pdf](DOCUMENTATION.pdf) — printable technical document (if available)
 
 Topics covered:
 - Data loading and normalization
