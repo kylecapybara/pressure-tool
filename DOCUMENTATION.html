@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.5.57">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Pressure Tool">
+<meta name="dcterms.date" content="2026-05-11">
+
+<title>Equilibrium Pressure Extractor: Technical Documentation</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="DOCUMENTATION_files/libs/clipboard/clipboard.min.js"></script>
+<script src="DOCUMENTATION_files/libs/quarto-html/quarto.js"></script>
+<script src="DOCUMENTATION_files/libs/quarto-html/popper.min.js"></script>
+<script src="DOCUMENTATION_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="DOCUMENTATION_files/libs/quarto-html/anchor.min.js"></script>
+<link href="DOCUMENTATION_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="DOCUMENTATION_files/libs/quarto-html/quarto-syntax-highlighting-dark.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="DOCUMENTATION_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="DOCUMENTATION_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="DOCUMENTATION_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="dark">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#architecture" id="toc-architecture" class="nav-link" data-scroll-target="#architecture">Architecture</a>
+  <ul class="collapse">
+  <li><a href="#data-flow" id="toc-data-flow" class="nav-link" data-scroll-target="#data-flow">Data Flow</a></li>
+  <li><a href="#key-data-structures" id="toc-key-data-structures" class="nav-link" data-scroll-target="#key-data-structures">Key Data Structures</a></li>
+  </ul></li>
+  <li><a href="#data-loading-parsing" id="toc-data-loading-parsing" class="nav-link" data-scroll-target="#data-loading-parsing">Data Loading &amp; Parsing</a>
+  <ul class="collapse">
+  <li><a href="#time-value-parsing" id="toc-time-value-parsing" class="nav-link" data-scroll-target="#time-value-parsing">Time Value Parsing</a></li>
+  <li><a href="#normalization" id="toc-normalization" class="nav-link" data-scroll-target="#normalization">Normalization</a></li>
+  </ul></li>
+  <li><a href="#region-statistics" id="toc-region-statistics" class="nav-link" data-scroll-target="#region-statistics">Region Statistics</a>
+  <ul class="collapse">
+  <li><a href="#selection-mechanism" id="toc-selection-mechanism" class="nav-link" data-scroll-target="#selection-mechanism">Selection Mechanism</a></li>
+  <li><a href="#statistics-computation" id="toc-statistics-computation" class="nav-link" data-scroll-target="#statistics-computation">Statistics Computation</a></li>
+  <li><a href="#real-time-updates" id="toc-real-time-updates" class="nav-link" data-scroll-target="#real-time-updates">Real-time Updates</a></li>
+  </ul></li>
+  <li><a href="#linear-drift-correction" id="toc-linear-drift-correction" class="nav-link" data-scroll-target="#linear-drift-correction">Linear Drift Correction</a>
+  <ul class="collapse">
+  <li><a href="#physical-motivation" id="toc-physical-motivation" class="nav-link" data-scroll-target="#physical-motivation">Physical Motivation</a></li>
+  <li><a href="#mathematical-model" id="toc-mathematical-model" class="nav-link" data-scroll-target="#mathematical-model">Mathematical Model</a></li>
+  <li><a href="#constraint-no-discontinuity-at-start" id="toc-constraint-no-discontinuity-at-start" class="nav-link" data-scroll-target="#constraint-no-discontinuity-at-start">Constraint: No Discontinuity at Start</a></li>
+  <li><a href="#implementation" id="toc-implementation" class="nav-link" data-scroll-target="#implementation">Implementation</a></li>
+  <li><a href="#interactive-controls" id="toc-interactive-controls" class="nav-link" data-scroll-target="#interactive-controls">Interactive Controls</a></li>
+  <li><a href="#reset-button" id="toc-reset-button" class="nav-link" data-scroll-target="#reset-button">Reset Button</a></li>
+  </ul></li>
+  <li><a href="#chart-visualization" id="toc-chart-visualization" class="nav-link" data-scroll-target="#chart-visualization">Chart Visualization</a>
+  <ul class="collapse">
+  <li><a href="#chart.js-integration" id="toc-chart.js-integration" class="nav-link" data-scroll-target="#chart.js-integration">Chart.js Integration</a></li>
+  <li><a href="#custom-plugins" id="toc-custom-plugins" class="nav-link" data-scroll-target="#custom-plugins">Custom Plugins</a></li>
+  <li><a href="#interactive-features" id="toc-interactive-features" class="nav-link" data-scroll-target="#interactive-features">Interactive Features</a></li>
+  </ul></li>
+  <li><a href="#export-functionality" id="toc-export-functionality" class="nav-link" data-scroll-target="#export-functionality">Export Functionality</a>
+  <ul class="collapse">
+  <li><a href="#csv-export" id="toc-csv-export" class="nav-link" data-scroll-target="#csv-export">CSV Export</a></li>
+  <li><a href="#tsv-copy-to-clipboard" id="toc-tsv-copy-to-clipboard" class="nav-link" data-scroll-target="#tsv-copy-to-clipboard">TSV Copy to Clipboard</a></li>
+  <li><a href="#significant-figures" id="toc-significant-figures" class="nav-link" data-scroll-target="#significant-figures">Significant Figures</a></li>
+  </ul></li>
+  <li><a href="#event-flow-state-management" id="toc-event-flow-state-management" class="nav-link" data-scroll-target="#event-flow-state-management">Event Flow &amp; State Management</a>
+  <ul class="collapse">
+  <li><a href="#initialization" id="toc-initialization" class="nav-link" data-scroll-target="#initialization">Initialization</a></li>
+  <li><a href="#correction-adjustment" id="toc-correction-adjustment" class="nav-link" data-scroll-target="#correction-adjustment">Correction Adjustment</a></li>
+  <li><a href="#dragging-startx-bar" id="toc-dragging-startx-bar" class="nav-link" data-scroll-target="#dragging-startx-bar">Dragging StartX Bar</a></li>
+  </ul></li>
+  <li><a href="#numerical-considerations" id="toc-numerical-considerations" class="nav-link" data-scroll-target="#numerical-considerations">Numerical Considerations</a>
+  <ul class="collapse">
+  <li><a href="#floating-point-tolerance" id="toc-floating-point-tolerance" class="nav-link" data-scroll-target="#floating-point-tolerance">Floating-Point Tolerance</a></li>
+  <li><a href="#data-point-indexing" id="toc-data-point-indexing" class="nav-link" data-scroll-target="#data-point-indexing">Data Point Indexing</a></li>
+  </ul></li>
+  <li><a href="#performance-notes" id="toc-performance-notes" class="nav-link" data-scroll-target="#performance-notes">Performance Notes</a></li>
+  <li><a href="#browser-compatibility" id="toc-browser-compatibility" class="nav-link" data-scroll-target="#browser-compatibility">Browser Compatibility</a></li>
+  <li><a href="#future-enhancements" id="toc-future-enhancements" class="nav-link" data-scroll-target="#future-enhancements">Future Enhancements</a></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Equilibrium Pressure Extractor: Technical Documentation</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Pressure Tool </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">May 11, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>The <strong>Equilibrium Pressure Extractor</strong> is an interactive web-based tool for analyzing time-series pressure and signal data from chemical equilibrium experiments. It provides features for:</p>
+<ul>
+<li>Loading and visualizing CSV data</li>
+<li>Defining regions of interest by dragging on the chart</li>
+<li>Computing statistics (mean, std, count) for each region</li>
+<li>Applying linear drift corrections to signal data</li>
+<li>Exporting corrected data in CSV or TSV format</li>
+</ul>
+<p>This tool is designed for VLE (vapor-liquid equilibrium) measurements where signal drift over time must be corrected before computing equilibrium properties.</p>
+<hr>
+</section>
+<section id="architecture" class="level2">
+<h2 class="anchored" data-anchor-id="architecture">Architecture</h2>
+<section id="data-flow" class="level3">
+<h3 class="anchored" data-anchor-id="data-flow">Data Flow</h3>
+<pre><code>CSV Input
+    ↓
+parseTimeValue() → parsedRows (raw x, y pairs)
+    ↓
+Normalize x: x_normalized = x - base (first x value)
+    ↓
+parsedOriginal (immutable reference)
+    ↓
+applyLinearCorrection()
+    ↓
+rawData (displayed data, corrected if enabled)
+    ↓
+Chart.js visualization + Region statistics
+    ↓
+Export (CSV/TSV)</code></pre>
+</section>
+<section id="key-data-structures" class="level3">
+<h3 class="anchored" data-anchor-id="key-data-structures">Key Data Structures</h3>
+<p><strong><code>originalData</code></strong>: Raw CSV rows (unmodified, for column selection)</p>
+<p><strong><code>parsedOriginal</code></strong>: Normalized time-series data (immutable baseline)</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> parsedOriginal <span class="op">=</span> [</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">x</span><span class="op">:</span> <span class="dv">0</span><span class="op">,</span>      <span class="dt">y</span><span class="op">:</span> <span class="fl">45.2</span> }<span class="op">,</span>  <span class="co">// first point (base subtracted)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">x</span><span class="op">:</span> <span class="fl">10.5</span><span class="op">,</span>   <span class="dt">y</span><span class="op">:</span> <span class="fl">45.1</span> }<span class="op">,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">x</span><span class="op">:</span> <span class="fl">21.0</span><span class="op">,</span>   <span class="dt">y</span><span class="op">:</span> <span class="fl">44.8</span> }<span class="op">,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ...</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><strong><code>rawData</code></strong>: Currently displayed data (corrected if linear correction enabled)</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> rawData <span class="op">=</span> [</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">x</span><span class="op">:</span> <span class="dv">0</span><span class="op">,</span>      <span class="dt">y</span><span class="op">:</span> <span class="fl">45.2</span> }<span class="op">,</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">x</span><span class="op">:</span> <span class="fl">10.5</span><span class="op">,</span>   <span class="dt">y</span><span class="op">:</span> <span class="fl">45.1</span> }<span class="op">,</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">x</span><span class="op">:</span> <span class="fl">21.0</span><span class="op">,</span>   <span class="dt">y</span><span class="op">:</span> <span class="fl">44.8</span> }<span class="op">,</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><strong><code>regions</code></strong>: User-defined selection regions for statistics</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> regions <span class="op">=</span> [</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">x0</span><span class="op">:</span> <span class="dv">5</span><span class="op">,</span> <span class="dt">x1</span><span class="op">:</span> <span class="dv">15</span><span class="op">,</span> <span class="dt">color</span><span class="op">:</span> <span class="st">'hsla(47, 85%, 60%, 0.35)'</span> }<span class="op">,</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">x0</span><span class="op">:</span> <span class="dv">30</span><span class="op">,</span> <span class="dt">x1</span><span class="op">:</span> <span class="dv">40</span><span class="op">,</span> <span class="dt">color</span><span class="op">:</span> <span class="st">'hsla(94, 85%, 60%, 0.35)'</span> }<span class="op">,</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><strong><code>correction</code></strong>: Linear correction parameters</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> correction <span class="op">=</span> {</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">enabled</span><span class="op">:</span> <span class="kw">false</span><span class="op">,</span>      <span class="co">// checkbox state</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">slope</span><span class="op">:</span> <span class="dv">0</span><span class="op">,</span>            <span class="co">// m in y = mx + b (range: 0 to 0.005)</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">intercept</span><span class="op">:</span> <span class="dv">0</span><span class="op">,</span>        <span class="co">// computed automatically</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">startX</span><span class="op">:</span> <span class="dv">0</span>            <span class="co">// where correction begins (draggable bar)</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<hr>
+</section>
+</section>
+<section id="data-loading-parsing" class="level2">
+<h2 class="anchored" data-anchor-id="data-loading-parsing">Data Loading &amp; Parsing</h2>
+<section id="time-value-parsing" class="level3">
+<h3 class="anchored" data-anchor-id="time-value-parsing">Time Value Parsing</h3>
+<p>The tool intelligently parses time columns that may be in various formats:</p>
+<ul>
+<li><strong>Numeric</strong>: <code>123.45</code> (seconds)</li>
+<li><strong>Date strings</strong>: <code>2026-05-11T14:30:00</code></li>
+<li><strong>Time strings</strong>: <code>14:30:05.123</code> (HH:MM:SS.ms)</li>
+</ul>
+<div class="sourceCode" id="cb6"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">parseTimeValue</span>(value) {</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (value <span class="op">==</span> <span class="kw">null</span> <span class="op">||</span> value <span class="op">===</span> <span class="st">''</span>) <span class="cf">return</span> <span class="kw">NaN</span><span class="op">;</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="kw">typeof</span> value <span class="op">===</span> <span class="st">'number'</span>) <span class="cf">return</span> value<span class="op">;</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> str <span class="op">=</span> <span class="bu">String</span>(value)<span class="op">.</span><span class="fu">trim</span>()<span class="op">;</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> numeric <span class="op">=</span> <span class="bu">Number</span>(str)<span class="op">;</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="bu">Number</span><span class="op">.</span><span class="fu">isFinite</span>(numeric)) <span class="cf">return</span> numeric<span class="op">;</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Try ISO date parsing</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> parsedDate <span class="op">=</span> <span class="bu">Date</span><span class="op">.</span><span class="fu">parse</span>(str)<span class="op">;</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="bu">Number</span><span class="op">.</span><span class="fu">isFinite</span>(parsedDate)) <span class="cf">return</span> parsedDate <span class="op">/</span> <span class="dv">1000</span><span class="op">;</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Try with T separator</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> parsedNormalized <span class="op">=</span> <span class="bu">Date</span><span class="op">.</span><span class="fu">parse</span>(str<span class="op">.</span><span class="fu">replace</span>(<span class="st">' '</span><span class="op">,</span> <span class="st">'T'</span>))<span class="op">;</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="bu">Number</span><span class="op">.</span><span class="fu">isFinite</span>(parsedNormalized)) <span class="cf">return</span> parsedNormalized <span class="op">/</span> <span class="dv">1000</span><span class="op">;</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Parse HH:MM:SS format</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> match <span class="op">=</span> str<span class="op">.</span><span class="fu">match</span>(<span class="ss">/</span><span class="sc">(\d{1,2}</span><span class="ss">:</span><span class="sc">\d{2}</span><span class="ss">:</span><span class="sc">\d{2}(?</span><span class="ss">:</span><span class="sc">\.\d+)?)</span><span class="ss">/</span>)<span class="op">;</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="op">!</span>match) <span class="cf">return</span> <span class="kw">NaN</span><span class="op">;</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> parts <span class="op">=</span> match[<span class="dv">1</span>]<span class="op">.</span><span class="fu">split</span>(<span class="st">':'</span>)<span class="op">;</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> hours <span class="op">=</span> <span class="bu">Number</span>(parts[<span class="dv">0</span>])<span class="op">;</span></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> minutes <span class="op">=</span> <span class="bu">Number</span>(parts[<span class="dv">1</span>])<span class="op">;</span></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> seconds <span class="op">=</span> <span class="bu">Number</span>(parts[<span class="dv">2</span>])<span class="op">;</span></span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> hours <span class="op">*</span> <span class="dv">3600</span> <span class="op">+</span> minutes <span class="op">*</span> <span class="dv">60</span> <span class="op">+</span> seconds<span class="op">;</span></span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="normalization" class="level3">
+<h3 class="anchored" data-anchor-id="normalization">Normalization</h3>
+<p>All x-values are normalized to begin at 0 by subtracting the first (base) x-value:</p>
+<p><span class="math display">\[x_{\text{normalized}} = x_i - x_1\]</span></p>
+<p>This simplifies time-series analysis and prevents numerical issues with large time offsets.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> base <span class="op">=</span> parsedRows[<span class="dv">0</span>]<span class="op">.</span><span class="at">x</span><span class="op">;</span>  <span class="co">// first time value</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>parsedOriginal <span class="op">=</span> parsedRows<span class="op">.</span><span class="fu">map</span>(point <span class="kw">=&gt;</span> ({</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">x</span><span class="op">:</span> point<span class="op">.</span><span class="at">x</span> <span class="op">-</span> base<span class="op">,</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">y</span><span class="op">:</span> point<span class="op">.</span><span class="at">y</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>}))<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<hr>
+</section>
+</section>
+<section id="region-statistics" class="level2">
+<h2 class="anchored" data-anchor-id="region-statistics">Region Statistics</h2>
+<section id="selection-mechanism" class="level3">
+<h3 class="anchored" data-anchor-id="selection-mechanism">Selection Mechanism</h3>
+<p>Users define regions by <strong>dragging across the chart</strong>. Each region is bounded by <span class="math inline">\(x_0\)</span> (start) and <span class="math inline">\(x_1\)</span> (end).</p>
+<p>Region objects store: - <code>x0</code>, <code>x1</code>: x-axis bounds - <code>color</code>: HSLA color for visualization</p>
+</section>
+<section id="statistics-computation" class="level3">
+<h3 class="anchored" data-anchor-id="statistics-computation">Statistics Computation</h3>
+<p>For each region, the tool computes:</p>
+<ol type="1">
+<li><p><strong>Mean</strong>: <span class="math display">\[\bar{y} = \frac{1}{n}\sum_{i=1}^{n} y_i\]</span></p></li>
+<li><p><strong>Standard Deviation</strong>: <span class="math display">\[s = \sqrt{\frac{1}{n-1}\sum_{i=1}^{n}(y_i - \bar{y})^2}\]</span></p></li>
+<li><p><strong>Point Count</strong>: <span class="math inline">\(n\)</span> = number of data points in region</p></li>
+</ol>
+<div class="sourceCode" id="cb8"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">computeStatsForRegion</span>(region) {</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> points <span class="op">=</span> rawData<span class="op">.</span><span class="fu">filter</span>(</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    point <span class="kw">=&gt;</span> point<span class="op">.</span><span class="at">x</span> <span class="op">&gt;=</span> region<span class="op">.</span><span class="at">x0</span> <span class="op">-</span> <span class="fl">1e-12</span> <span class="op">&amp;&amp;</span> </span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>             point<span class="op">.</span><span class="at">x</span> <span class="op">&lt;=</span> region<span class="op">.</span><span class="at">x1</span> <span class="op">+</span> <span class="fl">1e-12</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  )<span class="op">.</span><span class="fu">map</span>(point <span class="kw">=&gt;</span> point<span class="op">.</span><span class="at">y</span>)<span class="op">;</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> n <span class="op">=</span> points<span class="op">.</span><span class="at">length</span><span class="op">;</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (n <span class="op">===</span> <span class="dv">0</span>) <span class="cf">return</span> { <span class="dt">n</span><span class="op">:</span> <span class="dv">0</span><span class="op">,</span> <span class="dt">mean</span><span class="op">:</span> <span class="kw">NaN</span><span class="op">,</span> <span class="dt">std</span><span class="op">:</span> <span class="kw">NaN</span> }<span class="op">;</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> mean <span class="op">=</span> points<span class="op">.</span><span class="fu">reduce</span>((sum<span class="op">,</span> value) <span class="kw">=&gt;</span> sum <span class="op">+</span> value<span class="op">,</span> <span class="dv">0</span>) <span class="op">/</span> n<span class="op">;</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> std <span class="op">=</span> <span class="kw">NaN</span><span class="op">;</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (n <span class="op">&gt;</span> <span class="dv">1</span>) {</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> variance <span class="op">=</span> points<span class="op">.</span><span class="fu">reduce</span>(</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>      (sum<span class="op">,</span> value) <span class="kw">=&gt;</span> sum <span class="op">+</span> (value <span class="op">-</span> mean) <span class="op">**</span> <span class="dv">2</span><span class="op">,</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>      <span class="dv">0</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    ) <span class="op">/</span> (n <span class="op">-</span> <span class="dv">1</span>)<span class="op">;</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>    std <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">sqrt</span>(variance)<span class="op">;</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> { n<span class="op">,</span> mean<span class="op">,</span> std }<span class="op">;</span></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="real-time-updates" class="level3">
+<h3 class="anchored" data-anchor-id="real-time-updates">Real-time Updates</h3>
+<p>Statistics are recalculated whenever: - A new region is created - A region is moved or resized - Linear correction is toggled or adjusted - Slider values change</p>
+<p>The <code>updateRegionsTable()</code> function refreshes the display.</p>
+<hr>
+</section>
+</section>
+<section id="linear-drift-correction" class="level2">
+<h2 class="anchored" data-anchor-id="linear-drift-correction">Linear Drift Correction</h2>
+<section id="physical-motivation" class="level3">
+<h3 class="anchored" data-anchor-id="physical-motivation">Physical Motivation</h3>
+<p>In VLE experiments, sensor signals often drift linearly over time due to thermal effects or instrument drift. This feature removes a linear trend, allowing accurate equilibrium calculations.</p>
+</section>
+<section id="mathematical-model" class="level3">
+<h3 class="anchored" data-anchor-id="mathematical-model">Mathematical Model</h3>
+<p>Given uncorrected signal <span class="math inline">\(y(x)\)</span> where <span class="math inline">\(x\)</span> is time, we model the drift as:</p>
+<p><span class="math display">\[\text{drift}(x) = mx + b\]</span></p>
+<p>The corrected signal is:</p>
+<p><span class="math display">\[y_{\text{corrected}}(x) = y(x) - (mx + b)\]</span></p>
+<p>where: - <span class="math inline">\(m\)</span> is the <strong>slope</strong> (drift rate per unit time) - <span class="math inline">\(b\)</span> is the <strong>intercept</strong> (y-axis offset)</p>
+</section>
+<section id="constraint-no-discontinuity-at-start" class="level3">
+<h3 class="anchored" data-anchor-id="constraint-no-discontinuity-at-start">Constraint: No Discontinuity at Start</h3>
+<p>To prevent a jump in signal at the correction start point, we enforce:</p>
+<p><span class="math display">\[\text{drift}(x_{\text{start}}) = 0\]</span></p>
+<p>This gives: <span class="math display">\[mx_{\text{start}} + b = 0 \implies b = -mx_{\text{start}}\]</span></p>
+<p>Therefore:</p>
+<p><span class="math display">\[\text{drift}(x) = m(x - x_{\text{start}})\]</span></p>
+<p>And the corrected signal becomes:</p>
+<p><span class="math display">\[y_{\text{corrected}}(x) = y(x) - m(x - x_{\text{start}}) \quad \text{for } x \geq x_{\text{start}}\]</span></p>
+<p><strong>At <span class="math inline">\(x = x_{\text{start}}\)</span></strong>: correction = 0, so <span class="math inline">\(y_{\text{corrected}} = y\)</span> (unchanged)</p>
+<p><strong>For <span class="math inline">\(x &gt; x_{\text{start}}\)</span></strong>: correction grows linearly</p>
+</section>
+<section id="implementation" class="level3">
+<h3 class="anchored" data-anchor-id="implementation">Implementation</h3>
+<div class="sourceCode" id="cb9"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">computeIntercept</span>() {</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="co">// b = -m * startX ensures drift(startX) = 0</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  correction<span class="op">.</span><span class="at">intercept</span> <span class="op">=</span> <span class="op">-</span>correction<span class="op">.</span><span class="at">slope</span> <span class="op">*</span> correction<span class="op">.</span><span class="at">startX</span><span class="op">;</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">applyLinearCorrection</span>() {</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="op">!</span>parsedOriginal <span class="op">||</span> parsedOriginal<span class="op">.</span><span class="at">length</span> <span class="op">===</span> <span class="dv">0</span>) <span class="cf">return</span><span class="op">;</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Start from unmodified data</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  rawData <span class="op">=</span> parsedOriginal<span class="op">.</span><span class="fu">map</span>(p <span class="kw">=&gt;</span> ({ <span class="dt">x</span><span class="op">:</span> p<span class="op">.</span><span class="at">x</span><span class="op">,</span> <span class="dt">y</span><span class="op">:</span> p<span class="op">.</span><span class="at">y</span> }))<span class="op">;</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="op">!</span>correction<span class="op">.</span><span class="at">enabled</span>) {</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">updateRegionsTable</span>()<span class="op">;</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span><span class="op">;</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Compute intercept to avoid discontinuity</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">computeIntercept</span>()<span class="op">;</span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> m <span class="op">=</span> <span class="bu">Number</span>(correction<span class="op">.</span><span class="at">slope</span>) <span class="op">||</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> b <span class="op">=</span> <span class="bu">Number</span>(correction<span class="op">.</span><span class="at">intercept</span>) <span class="op">||</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> sx <span class="op">=</span> <span class="bu">Number</span>(correction<span class="op">.</span><span class="at">startX</span>) <span class="op">||</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Apply correction only for x &gt;= startX</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (<span class="kw">let</span> i <span class="op">=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> rawData<span class="op">.</span><span class="at">length</span><span class="op">;</span> i<span class="op">++</span>) {</span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (rawData[i]<span class="op">.</span><span class="at">x</span> <span class="op">&gt;=</span> sx <span class="op">-</span> <span class="fl">1e-12</span>) {</span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>      rawData[i]<span class="op">.</span><span class="at">y</span> <span class="op">=</span> rawData[i]<span class="op">.</span><span class="at">y</span> <span class="op">-</span> (m <span class="op">*</span> rawData[i]<span class="op">.</span><span class="at">x</span> <span class="op">+</span> b)<span class="op">;</span></span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Update chart and statistics</span></span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (chart <span class="op">&amp;&amp;</span> chart<span class="op">.</span><span class="at">data</span> <span class="op">&amp;&amp;</span> chart<span class="op">.</span><span class="at">data</span><span class="op">.</span><span class="at">datasets</span> <span class="op">&amp;&amp;</span> chart<span class="op">.</span><span class="at">data</span><span class="op">.</span><span class="at">datasets</span>[<span class="dv">0</span>]) {</span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a>    chart<span class="op">.</span><span class="at">data</span><span class="op">.</span><span class="at">datasets</span>[<span class="dv">0</span>]<span class="op">.</span><span class="at">data</span> <span class="op">=</span> rawData<span class="op">.</span><span class="fu">map</span>(p <span class="kw">=&gt;</span> ({ <span class="dt">x</span><span class="op">:</span> p<span class="op">.</span><span class="at">x</span><span class="op">,</span> <span class="dt">y</span><span class="op">:</span> p<span class="op">.</span><span class="at">y</span> }))<span class="op">;</span></span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>    chart<span class="op">.</span><span class="fu">update</span>()<span class="op">;</span></span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">updateRegionsTable</span>()<span class="op">;</span></span>
+<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="interactive-controls" class="level3">
+<h3 class="anchored" data-anchor-id="interactive-controls">Interactive Controls</h3>
+<p><strong>Slope Slider</strong> (0 to 0.005, step 0.00001): - Adjust drift rate with high precision - Range is user-customizable via min/max inputs - Changes apply instantly to chart and statistics</p>
+<p><strong>Start Position Bar</strong> (vertical draggable line): - Click and drag on the chart to reposition - Defines where correction begins - Color: orange (#ffff64cc) for visibility</p>
+<p><strong>Range Inputs</strong> (min/max): - Customize slider bounds - Useful for focusing on specific drift rates - Step size: 0.0001 for fine control</p>
+</section>
+<section id="reset-button" class="level3">
+<h3 class="anchored" data-anchor-id="reset-button">Reset Button</h3>
+<p>Restores defaults: - <code>correction.enabled = false</code> - <code>correction.slope = 0</code> - Slider range: 0 to 0.005 - Recalculates statistics on uncorrected data</p>
+<hr>
+</section>
+</section>
+<section id="chart-visualization" class="level2">
+<h2 class="anchored" data-anchor-id="chart-visualization">Chart Visualization</h2>
+<section id="chart.js-integration" class="level3">
+<h3 class="anchored" data-anchor-id="chart.js-integration">Chart.js Integration</h3>
+<p>The tool uses <strong>Chart.js 4.3</strong> with custom plugins for visualization:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> ds <span class="op">=</span> {</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">label</span><span class="op">:</span> signalLabel<span class="op">,</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">data</span><span class="op">:</span> rawData<span class="op">.</span><span class="fu">map</span>(point <span class="kw">=&gt;</span> ({ <span class="dt">x</span><span class="op">:</span> point<span class="op">.</span><span class="at">x</span><span class="op">,</span> <span class="dt">y</span><span class="op">:</span> point<span class="op">.</span><span class="at">y</span> }))<span class="op">,</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">borderColor</span><span class="op">:</span> <span class="st">'#bfefff'</span><span class="op">,</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">backgroundColor</span><span class="op">:</span> <span class="st">'rgba(79,195,247,0.15)'</span><span class="op">,</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">tension</span><span class="op">:</span> <span class="fl">0.05</span><span class="op">,</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">pointRadius</span><span class="op">:</span> <span class="dv">0</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>}<span class="op">;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>chart <span class="op">=</span> <span class="kw">new</span> <span class="fu">Chart</span>(ctx<span class="op">,</span> {</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  <span class="dt">type</span><span class="op">:</span> <span class="st">'line'</span><span class="op">,</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>  <span class="dt">data</span><span class="op">:</span> { <span class="dt">datasets</span><span class="op">:</span> [ds] }<span class="op">,</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  <span class="dt">options</span><span class="op">:</span> {</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>    <span class="dt">maintainAspectRatio</span><span class="op">:</span> <span class="kw">false</span><span class="op">,</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>    <span class="dt">scales</span><span class="op">:</span> {</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>      <span class="dt">x</span><span class="op">:</span> { <span class="dt">type</span><span class="op">:</span> <span class="st">'linear'</span> }<span class="op">,</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>      <span class="dt">y</span><span class="op">:</span> { }</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  }<span class="op">,</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>  <span class="dt">plugins</span><span class="op">:</span> [regionPlugin<span class="op">,</span> verticalBarPlugin]</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>})<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="custom-plugins" class="level3">
+<h3 class="anchored" data-anchor-id="custom-plugins">Custom Plugins</h3>
+<p><strong><code>regionPlugin</code></strong>: Draws region overlays and the startX bar</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> regionPlugin <span class="op">=</span> {</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">id</span><span class="op">:</span> <span class="st">'regionPlugin'</span><span class="op">,</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">afterDatasetsDraw</span>(chartInstance) {</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> drawCtx <span class="op">=</span> chartInstance<span class="op">.</span><span class="at">ctx</span><span class="op">;</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> xScale <span class="op">=</span> chartInstance<span class="op">.</span><span class="at">scales</span><span class="op">.</span><span class="at">x</span><span class="op">;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> chartArea <span class="op">=</span> chartInstance<span class="op">.</span><span class="at">chartArea</span><span class="op">;</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Draw regions</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    regions<span class="op">.</span><span class="fu">forEach</span>(region <span class="kw">=&gt;</span> {</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>      <span class="kw">const</span> left <span class="op">=</span> xScale<span class="op">.</span><span class="fu">getPixelForValue</span>(region<span class="op">.</span><span class="at">x0</span>)<span class="op">;</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>      <span class="kw">const</span> right <span class="op">=</span> xScale<span class="op">.</span><span class="fu">getPixelForValue</span>(region<span class="op">.</span><span class="at">x1</span>)<span class="op">;</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="at">fillStyle</span> <span class="op">=</span> region<span class="op">.</span><span class="at">color</span><span class="op">;</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="fu">fillRect</span>(</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>        <span class="bu">Math</span><span class="op">.</span><span class="fu">min</span>(left<span class="op">,</span> right)<span class="op">,</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>        chartArea<span class="op">.</span><span class="at">top</span><span class="op">,</span></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>        <span class="bu">Math</span><span class="op">.</span><span class="fu">abs</span>(right <span class="op">-</span> left)<span class="op">,</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>        chartArea<span class="op">.</span><span class="at">bottom</span> <span class="op">-</span> chartArea<span class="op">.</span><span class="at">top</span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>      )<span class="op">;</span></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>    })<span class="op">;</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Draw startX vertical bar</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (correction <span class="op">&amp;&amp;</span> <span class="kw">typeof</span> correction<span class="op">.</span><span class="at">startX</span> <span class="op">===</span> <span class="st">'number'</span>) {</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>      <span class="kw">const</span> px <span class="op">=</span> xScale<span class="op">.</span><span class="fu">getPixelForValue</span>(correction<span class="op">.</span><span class="at">startX</span>)<span class="op">;</span></span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="at">strokeStyle</span> <span class="op">=</span> <span class="st">'rgba(255,200,100,0.9)'</span><span class="op">;</span></span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="at">lineWidth</span> <span class="op">=</span> <span class="dv">2</span><span class="op">;</span></span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="fu">beginPath</span>()<span class="op">;</span></span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="fu">moveTo</span>(px<span class="op">,</span> chartArea<span class="op">.</span><span class="at">top</span>)<span class="op">;</span></span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="fu">lineTo</span>(px<span class="op">,</span> chartArea<span class="op">.</span><span class="at">bottom</span>)<span class="op">;</span></span>
+<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="fu">stroke</span>()<span class="op">;</span></span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>      </span>
+<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>      <span class="co">// Handle for dragging</span></span>
+<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="at">fillStyle</span> <span class="op">=</span> <span class="st">'rgba(255,200,100,0.95)'</span><span class="op">;</span></span>
+<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>      drawCtx<span class="op">.</span><span class="fu">fillRect</span>(px <span class="op">-</span> <span class="dv">4</span><span class="op">,</span> chartArea<span class="op">.</span><span class="at">top</span> <span class="op">+</span> <span class="dv">6</span><span class="op">,</span> <span class="dv">8</span><span class="op">,</span> <span class="dv">18</span>)<span class="op">;</span></span>
+<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>}<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="interactive-features" class="level3">
+<h3 class="anchored" data-anchor-id="interactive-features">Interactive Features</h3>
+<ul>
+<li><strong>Drag to create region</strong>: Click and drag across chart</li>
+<li><strong>Drag to resize region</strong>: Move region edges (8px threshold)</li>
+<li><strong>Drag to move region</strong>: Click region center and drag</li>
+<li><strong>Shift + drag to zoom X-axis</strong>: Resets with “Reset X Zoom” button</li>
+<li><strong>Drag vertical bar</strong>: Move startX position for correction</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="export-functionality" class="level2">
+<h2 class="anchored" data-anchor-id="export-functionality">Export Functionality</h2>
+<section id="csv-export" class="level3">
+<h3 class="anchored" data-anchor-id="csv-export">CSV Export</h3>
+<p>Exports region statistics with headers:</p>
+<pre><code>region,x_start,x_end,mean_signal,std_signal,n_points
+1,15,45,44.932,0.0234,1204
+2,98,156,44.891,0.0198,2340</code></pre>
+<div class="sourceCode" id="cb13"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">generateExportCSV</span>() {</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> sortedRegions <span class="op">=</span> [<span class="op">...</span>regions]<span class="op">.</span><span class="fu">sort</span>((a<span class="op">,</span> b) <span class="kw">=&gt;</span> a<span class="op">.</span><span class="at">x0</span> <span class="op">-</span> b<span class="op">.</span><span class="at">x0</span>)<span class="op">;</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> lines <span class="op">=</span> [<span class="st">'region,x_start,x_end,mean_signal,std_signal,n_points'</span>]<span class="op">;</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  sortedRegions<span class="op">.</span><span class="fu">forEach</span>((region<span class="op">,</span> idx) <span class="kw">=&gt;</span> {</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> stats <span class="op">=</span> <span class="fu">computeStatsForRegion</span>(region)<span class="op">;</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> x_start_idx <span class="op">=</span> <span class="fu">getIndexForX</span>(region<span class="op">.</span><span class="at">x0</span>)<span class="op">;</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> x_end_idx <span class="op">=</span> <span class="fu">getIndexForX</span>(region<span class="op">.</span><span class="at">x1</span>)<span class="op">;</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    lines<span class="op">.</span><span class="fu">push</span>([</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>      idx <span class="op">+</span> <span class="dv">1</span><span class="op">,</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>      x_start_idx<span class="op">,</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>      x_end_idx<span class="op">,</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>      stats<span class="op">.</span><span class="at">n</span> <span class="op">&gt;=</span> <span class="dv">1</span> <span class="op">?</span> <span class="fu">formatSig</span>(stats<span class="op">.</span><span class="at">mean</span>) <span class="op">:</span> <span class="st">''</span><span class="op">,</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>      stats<span class="op">.</span><span class="at">n</span> <span class="op">&gt;</span> <span class="dv">1</span> <span class="op">?</span> <span class="fu">formatSig</span>(stats<span class="op">.</span><span class="at">std</span>) <span class="op">:</span> <span class="st">''</span><span class="op">,</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>      stats<span class="op">.</span><span class="at">n</span></span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>    ]<span class="op">.</span><span class="fu">join</span>(<span class="st">','</span>))<span class="op">;</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>  })<span class="op">;</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> lines<span class="op">.</span><span class="fu">join</span>(<span class="st">'</span><span class="sc">\n</span><span class="st">'</span>)<span class="op">;</span></span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="tsv-copy-to-clipboard" class="level3">
+<h3 class="anchored" data-anchor-id="tsv-copy-to-clipboard">TSV Copy to Clipboard</h3>
+<p>Tab-separated format for spreadsheet pasting:</p>
+<pre><code>region  x_start x_end   mean_signal std_signal  n_points
+1   15  45  44.932  0.0234  1204</code></pre>
+</section>
+<section id="significant-figures" class="level3">
+<h3 class="anchored" data-anchor-id="significant-figures">Significant Figures</h3>
+<p>Values are formatted to user-selected precision (3–8 significant figures):</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">formatSig</span>(value) {</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="kw">typeof</span> value <span class="op">!==</span> <span class="st">'number'</span> <span class="op">||</span> <span class="op">!</span><span class="bu">Number</span><span class="op">.</span><span class="fu">isFinite</span>(value)) <span class="cf">return</span> <span class="st">'-'</span><span class="op">;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> <span class="bu">Number</span>(value)<span class="op">.</span><span class="fu">toPrecision</span>(selectedSigFigs)<span class="op">;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<hr>
+</section>
+</section>
+<section id="event-flow-state-management" class="level2">
+<h2 class="anchored" data-anchor-id="event-flow-state-management">Event Flow &amp; State Management</h2>
+<section id="initialization" class="level3">
+<h3 class="anchored" data-anchor-id="initialization">Initialization</h3>
+<ol type="1">
+<li>User loads CSV file</li>
+<li><code>fileInput.addEventListener('change')</code> triggers</li>
+<li>PapaParse parses file with dynamic typing</li>
+<li><code>loadParsed()</code> processes rows:
+<ul>
+<li>Extracts numeric columns</li>
+<li>Sorts by x-value</li>
+<li>Normalizes x to start at 0</li>
+<li>Populates <code>parsedOriginal</code></li>
+</ul></li>
+<li><code>applyLinearCorrection()</code> (no-op if disabled)</li>
+<li><code>createChart()</code> initializes Chart.js</li>
+<li><code>setupDrag()</code> attaches mouse handlers</li>
+</ol>
+</section>
+<section id="correction-adjustment" class="level3">
+<h3 class="anchored" data-anchor-id="correction-adjustment">Correction Adjustment</h3>
+<ol type="1">
+<li>User moves <strong>slope slider</strong> → <code>slopeSlider.addEventListener('input')</code></li>
+<li>Update <code>correction.slope</code></li>
+<li>Call <code>computeIntercept()</code> to ensure no discontinuity</li>
+<li>Call <code>applyLinearCorrection()</code> to rebuild <code>rawData</code></li>
+<li>Call <code>updateRegionsTable()</code> to refresh statistics</li>
+<li>Chart updates via <code>chart.update()</code></li>
+</ol>
+</section>
+<section id="dragging-startx-bar" class="level3">
+<h3 class="anchored" data-anchor-id="dragging-startx-bar">Dragging StartX Bar</h3>
+<ol type="1">
+<li>Mouse down near vertical bar → <code>draggingStartBar = true</code></li>
+<li>Mouse move: compute new x from pixel position</li>
+<li>Update <code>correction.startX</code>, recalculate intercept</li>
+<li>Rebuild <code>rawData</code> and refresh chart</li>
+<li>Mouse up: finalize and unlock</li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="numerical-considerations" class="level2">
+<h2 class="anchored" data-anchor-id="numerical-considerations">Numerical Considerations</h2>
+<section id="floating-point-tolerance" class="level3">
+<h3 class="anchored" data-anchor-id="floating-point-tolerance">Floating-Point Tolerance</h3>
+<p>Comparisons use epsilon thresholds to handle rounding:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Instead of: point.x === region.x0</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co">// Use:</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (point<span class="op">.</span><span class="at">x</span> <span class="op">&gt;=</span> region<span class="op">.</span><span class="at">x0</span> <span class="op">-</span> <span class="fl">1e-12</span> <span class="op">&amp;&amp;</span> </span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    point<span class="op">.</span><span class="at">x</span> <span class="op">&lt;=</span> region<span class="op">.</span><span class="at">x1</span> <span class="op">+</span> <span class="fl">1e-12</span>) { <span class="op">...</span> }</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="data-point-indexing" class="level3">
+<h3 class="anchored" data-anchor-id="data-point-indexing">Data Point Indexing</h3>
+<p>Map continuous x-values to nearest discrete data point:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode javascript code-with-copy"><code class="sourceCode javascript"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">getIndexForX</span>(xValue) {</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="op">!</span>rawData <span class="op">||</span> rawData<span class="op">.</span><span class="at">length</span> <span class="op">===</span> <span class="dv">0</span>) <span class="cf">return</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> closestIdx <span class="op">=</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> closestDist <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">abs</span>(rawData[<span class="dv">0</span>]<span class="op">.</span><span class="at">x</span> <span class="op">-</span> xValue)<span class="op">;</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (<span class="kw">let</span> i <span class="op">=</span> <span class="dv">1</span><span class="op">;</span> i <span class="op">&lt;</span> rawData<span class="op">.</span><span class="at">length</span><span class="op">;</span> i<span class="op">++</span>) {</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> dist <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">abs</span>(rawData[i]<span class="op">.</span><span class="at">x</span> <span class="op">-</span> xValue)<span class="op">;</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (dist <span class="op">&lt;</span> closestDist) {</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>      closestDist <span class="op">=</span> dist<span class="op">;</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>      closestIdx <span class="op">=</span> i<span class="op">;</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> closestIdx<span class="op">;</span></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<hr>
+</section>
+</section>
+<section id="performance-notes" class="level2">
+<h2 class="anchored" data-anchor-id="performance-notes">Performance Notes</h2>
+<ul>
+<li><strong>Chart recreation</strong>: Avoided during correction updates; uses <code>chart.update()</code> instead</li>
+<li><strong>Region statistics</strong>: Computed on-demand only when displayed</li>
+<li><strong>Data immutability</strong>: <code>parsedOriginal</code> never modified; corrections applied to <code>rawData</code> copy</li>
+<li><strong>Memory</strong>: For typical VLE datasets (~10k points), memory usage is negligible</li>
+</ul>
+<hr>
+</section>
+<section id="browser-compatibility" class="level2">
+<h2 class="anchored" data-anchor-id="browser-compatibility">Browser Compatibility</h2>
+<ul>
+<li><strong>Chart.js 4.3</strong>: Modern browsers (Chrome, Firefox, Safari, Edge)</li>
+<li><strong>File API</strong>: Required for CSV upload (all modern browsers)</li>
+<li><strong>ES6</strong>: Uses arrow functions, template literals, spread operator</li>
+<li><strong>Local Execution</strong>: No external API calls; runs entirely in-browser</li>
+</ul>
+<hr>
+</section>
+<section id="future-enhancements" class="level2">
+<h2 class="anchored" data-anchor-id="future-enhancements">Future Enhancements</h2>
+<ul>
+<li><strong>Higher-order corrections</strong>: Polynomial drift (quadratic, cubic)</li>
+<li><strong>Multiple corrections</strong>: Independent per-region adjustments</li>
+<li><strong>Data smoothing</strong>: Moving average or Savitzky-Golay filter</li>
+<li><strong>Peak detection</strong>: Automatic region identification</li>
+<li><strong>undo/redo</strong>: Revert recent corrections</li>
+<li><strong>Export formats</strong>: JSON, HDF5, Parquet</li>
+</ul>
+<hr>
+</section>
+<section id="references" class="level2">
+<h2 class="anchored" data-anchor-id="references">References</h2>
+<ul>
+<li>Chart.js Documentation: https://www.chartjs.org/docs/latest/</li>
+<li>PapaParse CSV Parser: https://www.papaparse.com/</li>
+<li>IEEE Standard for Floating-Point Arithmetic (IEEE 754)</li>
+</ul>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const onCopySuccess = function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  }
+  const getTextToCopy = function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+    text: getTextToCopy
+  });
+  clipboard.on('success', onCopySuccess);
+  if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+    // For code content inside modals, clipBoardJS needs to be initialized with a container option
+    // TODO: Check when it could be a function (https://github.com/zenorocha/clipboard.js/issues/860)
+    const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+      text: getTextToCopy,
+      container: window.document.getElementById('quarto-embedded-source-code-modal')
+    });
+    clipboardModal.on('success', onCopySuccess);
+  }
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
