@@ -138,6 +138,9 @@
     // correction state
     let correction = { enabled: false, slope: 0, intercept: 0, startX: 0 };
     let draggingStartBar = false;
+    // undo stack: store snapshots of mutable state
+    const undoStack = [];
+    const UNDO_LIMIT = 200;
 
     const fileInput = document.getElementById('file');
     const placeholder = document.getElementById('placeholder');
@@ -157,6 +160,24 @@
     const sliderMin = document.getElementById('sliderMin');
     const sliderMax = document.getElementById('sliderMax');
     const resetCorrectionBtn = document.getElementById('resetCorrection');
+    const correctionControls = (function(){
+      // wrapper element for slider+range inputs; create if missing
+      let el = document.getElementById('correctionControls');
+      if (!el) {
+        // find the slider's parent and range's parent and wrap them
+        const sliderGroup = slopeSlider.parentElement;
+        const rangeGroup = sliderMin.parentElement;
+        el = document.createElement('div');
+        el.id = 'correctionControls';
+        el.style.display = 'none';
+        el.style.gap = '8px';
+        el.style.alignItems = 'center';
+        sliderGroup.parentElement.insertBefore(el, sliderGroup);
+        el.appendChild(sliderGroup);
+        el.appendChild(rangeGroup);
+      }
+      return el;
+    })();
     sigfigSelect.value = '6';
 
     fileInput.addEventListener('change', (event) => {
@@ -170,6 +191,65 @@
         error: () => alert('Could not read the selected CSV file.')
       });
     });
+
+    // Undo helpers
+    function makeSnapshot() {
+      return {
+        regions: JSON.parse(JSON.stringify(regions)),
+        correction: JSON.parse(JSON.stringify(correction)),
+        xMin: chart && chart.options && chart.options.scales && chart.options.scales.x ? chart.options.scales.x.min : null,
+        xMax: chart && chart.options && chart.options.scales && chart.options.scales.x ? chart.options.scales.x.max : null
+      };
+    }
+
+    function pushUndo() {
+      try {
+        undoStack.push(makeSnapshot());
+        if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+      } catch (e) {
+        console.error('pushUndo error', e);
+      }
+    }
+
+    function undo() {
+      if (undoStack.length === 0) return;
+      const snap = undoStack.pop();
+      if (!snap) return;
+      regions = JSON.parse(JSON.stringify(snap.regions));
+      correction = JSON.parse(JSON.stringify(snap.correction));
+      // restore UI
+      enableCorrection.checked = !!correction.enabled;
+      slopeSlider.value = String(correction.slope || 0);
+      slopeValue.value = (Number(correction.slope) || 0).toFixed(4);
+      // restore slider bounds if present
+      if (typeof snap !== 'undefined' && chart && chart.options && chart.options.scales && chart.options.scales.x) {
+        if (snap.xMin == null) delete chart.options.scales.x.min;
+        else chart.options.scales.x.min = snap.xMin;
+        if (snap.xMax == null) delete chart.options.scales.x.max;
+        else chart.options.scales.x.max = snap.xMax;
+      }
+      updateCorrectionControlsVisibility();
+      applyLinearCorrection();
+      updateRegionsTable();
+      if (chart) chart.update();
+    }
+
+    // Ctrl+Z / Cmd+Z - use capturing listener so focused inputs don't stop propagation
+    window.addEventListener('keydown', (e) => {
+      try {
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key && e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          undo();
+        }
+      } catch (err) {
+        console.error('undo key handler error', err);
+      }
+    }, true);
+
+    function updateCorrectionControlsVisibility() {
+      const visible = enableCorrection.checked;
+      correctionControls.style.display = visible ? 'flex' : 'none';
+    }
 
     function getRegionUnderPixel(pixelX) {
       if (!chart) return null;
@@ -422,19 +502,23 @@
         const regionInfo = getRegionUnderPixel(event.offsetX);
         if (nearBar) {
           // start dragging the startX bar
+          pushUndo();
           draggingStartBar = true;
           correction.enabled = true;
         } else if (isShift) {
           // start an X-axis zoom drag (Shift + drag)
+          pushUndo();
           isDownZoom = true;
           startPixel = event.offsetX;
           tempBand = null;
         } else if (regionInfo) {
           // existing region drag/resize
+          pushUndo();
           draggedRegion = regionInfo;
           draggedInitialValue = regionInfo.edge === 'left' ? regions[regionInfo.index].x0 : regionInfo.edge === 'right' ? regions[regionInfo.index].x1 : { x0: regions[regionInfo.index].x0, x1: regions[regionInfo.index].x1 };
         } else {
           // create a new signal region
+          pushUndo();
           isDown = true;
           startPixel = event.offsetX;
           tempBand = null;
@@ -636,6 +720,7 @@
       regionsBody.querySelectorAll('.remove').forEach((button) => {
         button.addEventListener('click', (event) => {
           const index = Number(event.currentTarget.dataset.idx);
+          pushUndo();
           regions.splice(index, 1);
           updateRegionsTable();
           if (chart) chart.draw();
@@ -644,6 +729,7 @@
     }
 
     clearAllBtn.addEventListener('click', () => {
+      pushUndo();
       regions = [];
       updateRegionsTable();
       if (chart) chart.draw();
@@ -651,6 +737,7 @@
 
     resetZoomBtn.addEventListener('click', () => {
       if (!chart || !chart.options || !chart.options.scales || !chart.options.scales.x) return;
+      pushUndo();
       delete chart.options.scales.x.min;
       delete chart.options.scales.x.max;
       chart.update();
@@ -766,6 +853,7 @@
       // when enabling, ensure intercept and apply
       if (correction.enabled) computeIntercept();
       applyLinearCorrection();
+      updateCorrectionControlsVisibility();
     });
 
     slopeSlider.addEventListener('input', (e) => {
@@ -776,6 +864,12 @@
       computeIntercept();
       applyLinearCorrection();
     });
+
+    // push undo when user starts interacting with controls
+    slopeSlider.addEventListener('pointerdown', () => pushUndo());
+    sliderMin.addEventListener('pointerdown', () => pushUndo());
+    sliderMax.addEventListener('pointerdown', () => pushUndo());
+    slopeValue.addEventListener('focus', () => pushUndo());
 
     slopeValue.addEventListener('change', (e) => {
       let v = Number(e.currentTarget.value);
@@ -829,6 +923,8 @@
       enableCorrection.checked = false;
       applyLinearCorrection();
     });
+    // initialize visibility of correction controls
+    updateCorrectionControlsVisibility();
   </script>
 </body>
 </html>
